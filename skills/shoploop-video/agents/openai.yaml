@@ -1,0 +1,4 @@
+interface:
+  display_name: "Shoploop Video"
+  short_description: "Generate Shoploop videos from text and references"
+  default_prompt: "Use $shoploop-video to generate a short 9:16 product video from this prompt."
