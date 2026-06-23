@@ -23,20 +23,32 @@ The CLI finds `.env.shoploop` by searching from the current directory upward to 
 SHOPLOOP_KEY=sk-your-customer-key
 ```
 
-If the key is missing or the skill is not installed, use `shoploop-setup`.
+## API Key — Check First
+
+Before generating, confirm a usable key exists. Run:
+
+```bash
+python3 .agents/skills/shoploop-video/scripts/shoploop.py --check-key
+```
+
+- It prints `SHOPLOOP_KEY: configured` (exit 0) when a real key is set, or `not configured` (exit 3) when `.env.shoploop` is missing, the value is empty, or it is still the template placeholder `sk-your-customer-key`. It never prints the key itself.
+- If not configured: **stop and ask the user for their Shoploop key** (format `sk-...`). When they give it, write it into `.env.shoploop` at the project root as `SHOPLOOP_KEY=<their key>` (create the file from `assets/env.shoploop.example` if it does not exist), then re-run `--check-key` to confirm before generating.
+- If the user does not have a key, tell them to get one from their Shoploop provider. Never guess, invent, or reuse a key, and never echo the key back into chat, logs, or commits.
+- Prefer `shoploop-setup` when the skill itself is not installed or you want the full scaffold (`.env.shoploop` + `.gitignore` + check) in one step.
 
 ## Workflow
 
-1. Understand the user's target video: subject, action, style, aspect ratio, duration, and deliverable path.
-2. Preserve every user-provided image or video exactly. Do not crop, resize, enhance, extract frames, transcode, or split media unless the user explicitly asks.
-3. Choose the smallest matching mode:
+1. Confirm the key is configured (see **API Key — Check First**). If it is not, ask the user for it and save it before doing anything else.
+2. Understand the user's target video: subject, action, style, aspect ratio, duration, and deliverable path.
+3. Preserve every user-provided image or video exactly. Do not crop, resize, enhance, extract frames, transcode, or split media unless the user explicitly asks.
+4. Choose the smallest matching mode:
    - Text only: no references.
    - One image: `--mode image`.
    - Two or more images as visual, character, style, product, or scene references: `--mode multi-reference`.
    - First and last frame: `--mode first-last` and pass the first frame before the last frame.
    - Reference video for motion, rhythm, or camera movement: `--mode video-reference`.
-4. Run `scripts/shoploop.py` with `--json` when another tool needs machine-readable output; otherwise return the mp4 URL and any downloaded file path.
-5. If rendering fails, report the Shoploop-facing reason plainly and suggest a smaller, safer prompt only when moderation or prompt ambiguity is the likely cause.
+5. Run `scripts/shoploop.py` with `--json` when another tool needs machine-readable output; otherwise return the mp4 URL and any downloaded file path.
+6. If rendering fails, report the Shoploop-facing reason plainly and suggest a smaller, safer prompt only when moderation or prompt ambiguity is the likely cause.
 
 ## Command Patterns
 
@@ -82,6 +94,8 @@ python3 .agents/skills/shoploop-video/scripts/shoploop.py "use the product photo
 ## Common Mistakes
 
 - Do not ask users to run commands themselves when you can run the CLI.
+- Do not call the API before confirming a key is configured; if it is missing or still the placeholder, ask the user for their key and save it first.
+- Do not guess, invent, or reuse an API key.
 - Do not expose hidden provider names, internal model versions, or upstream account details.
 - Do not print or store `SHOPLOOP_KEY`.
 - Do not alter reference media unless explicitly requested.

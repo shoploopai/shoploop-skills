@@ -105,15 +105,31 @@ def check(project: Path, skill_parent: Path | None = None) -> int:
         exists = (skill_parent / name / "SKILL.md").exists()
         print(f"[shoploop-setup] optional skill {name}: {'present' if exists else 'not included'}")
 
-    env_path = project / ".env.shoploop"
-    env_values = _load_env(env_path)
-    key = (os.environ.get("SHOPLOOP_KEY") or env_values.get("SHOPLOOP_KEY") or "").strip()
-    key_set = bool(key and key != "sk-your-customer-key")
+    cli = skill_parent / "shoploop-video" / "scripts" / "shoploop.py"
+
+    # Resolve "configured" exactly the way the video CLI does so setup and the
+    # actual generate path can never disagree (e.g. an empty/whitespace
+    # SHOPLOOP_KEY exported in the shell must not look "set" here while the CLI
+    # refuses to render). Prefer the CLI itself as the single source of truth;
+    # fall back to an equivalent inline check (non-empty env wins, else file).
+    if cli.exists():
+        kr = subprocess.run(
+            [sys.executable, str(cli), "--check-key"],
+            cwd=str(project),
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        key_set = kr.returncode == 0
+    else:
+        env_values = _load_env(project / ".env.shoploop")
+        env_var = (os.environ.get("SHOPLOOP_KEY") or "").strip()
+        key = env_var or env_values.get("SHOPLOOP_KEY", "").strip()
+        key_set = bool(key and key != "sk-your-customer-key")
     print(f"[shoploop-setup] SHOPLOOP_KEY: {'set' if key_set else 'unset'}")
     if not key_set:
         ok = False
 
-    cli = skill_parent / "shoploop-video" / "scripts" / "shoploop.py"
     if cli.exists():
         result = subprocess.run(
             [sys.executable, str(cli), "setup dry run", "--dry-run"],

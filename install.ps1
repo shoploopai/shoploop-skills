@@ -31,6 +31,7 @@ This workspace generates no-watermark videos through **Shoploop**. When the user
 Provider & privacy:
 - Shoploop / Seedance is the only provider. Never mention, guess, or expose any hidden upstream vendor, internal model versions, or supplier tokens.
 - The API key is `SHOPLOOP_KEY` in `.env.shoploop`. Never print, log, or commit it.
+- If no key is configured yet (`.env.shoploop` missing, empty, or still `sk-your-customer-key`), ask the user for their Shoploop key and write it to `.env.shoploop` before generating. Never guess a key. Verify with `python3 .agents/skills/shoploop-video/scripts/shoploop.py --check-key`.
 
 If the shoploop-video skill is not installed yet, install it, then make sure the key is set:
 

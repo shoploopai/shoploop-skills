@@ -60,6 +60,9 @@ SHOPLOOP_KEY=sk-换成你的key
 (可选,通常不用改)`SHOPLOOP_BASE=https://seedance.shoploopai.com` 和 `SHOPLOOP_MODEL=seedance2.0` 已是默认值。
 **不要把这个文件发给别人、也不要提交到 git。**
 
+> 嫌麻烦也可以跳过这步:出片时如果还没配置 key,技能会先停下来找你要,你把 key(`sk-...`)发给 Codex,它会自动写进 `.env.shoploop` 再继续。
+> Prefer to skip this? You can — if no key is set when you ask for a video, the skill stops and asks you for it, then saves it to `.env.shoploop` and continues.
+
 ## 第 3 步:重开 Codex / Restart Codex
 
 关掉当前 Codex,**重新打开一个会话**(新装的技能要新会话才会加载)。

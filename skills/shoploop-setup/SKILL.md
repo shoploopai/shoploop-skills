@@ -32,7 +32,7 @@ python3 .agents/skills/shoploop-setup/scripts/shoploop_setup.py --project .
 python3 .agents/skills/shoploop-setup/scripts/shoploop_setup.py --global
 ```
 
-4. Create or update `.env.shoploop`:
+4. Create or update `.env.shoploop`. The helper seeds it from the template with the placeholder `SHOPLOOP_KEY=sk-your-customer-key`. **Ask the user for their Shoploop key** (format `sk-...`) and replace the placeholder with it. If the user does not have a key, tell them to get one from their Shoploop provider — never guess or invent a key, and never echo it back into chat, logs, or commits.
 
 ```bash
 SHOPLOOP_KEY=sk-customer-key
@@ -50,7 +50,8 @@ python3 .agents/skills/shoploop-setup/scripts/shoploop_setup.py --project . --ch
 
 - `shoploop-video` and `shoploop-setup` exist in the selected skill directory.
 - `shoploop-reseller` is optional and should only be present in reseller/operator packages.
-- `SHOPLOOP_KEY` is set through `.env.shoploop` or the shell environment. Report only set/unset; never print the key.
+- `SHOPLOOP_KEY` is set through `.env.shoploop` or the shell environment, and is not the placeholder `sk-your-customer-key`. The check reports `unset` for an empty value or the placeholder. Report only set/unset; never print the key. If unset, ask the user for their key and save it before finishing.
+- You can also run the video CLI's own check: `python3 .agents/skills/shoploop-video/scripts/shoploop.py --check-key` (exit 0 = configured, exit 3 = not configured).
 - `shoploop-video/scripts/shoploop.py --dry-run` can build a request body.
 - The user knows that a new Codex session may be needed for newly installed skills to appear in the skill list.
 
