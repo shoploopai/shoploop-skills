@@ -17,7 +17,9 @@ if ! command -v npx >/dev/null 2>&1; then
   exit 1
 fi
 
-npx -y skills add shoploopai/shoploop-skills --all -a codex $GLOBAL
+# Redirect stdin from /dev/null so that, when this script is piped via
+# `curl ... | sh`, npx does not consume the rest of the script from stdin.
+npx -y skills add shoploopai/shoploop-skills --all -a codex $GLOBAL < /dev/null
 
 if [ -z "$GLOBAL" ] && [ ! -f .env.shoploop ]; then
   cat > .env.shoploop <<'EOF'
