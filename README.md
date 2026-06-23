@@ -1,53 +1,89 @@
-# Shoploop AI — Codex 视频技能 / Codex Video Skills
+# Shoploop AI — Codex 视频技能 / Video Skills for Codex
 
-无水印视频生成的 Codex Agent Skills。装进 Codex 后,直接用自然语言让它出片。
-White-label Codex agent skills for no-watermark video generation — install once, then ask Codex in plain language to make videos.
+让 Codex 用一句话帮你生成**无水印视频**(文生视频 / 图生视频 / 首尾帧 / 多参考 / 视频参考)。
+Make no-watermark videos in Codex with one sentence.
 
-技能 / Skills: `shoploop-video`(出片 / generate)、`shoploop-setup`(装与自检 / install + self-check)。
+下面任选一种方式安装。On Windows, replace `python3` with `python` or `py -3`.
 
-> Windows 用户把命令里的 `python3` 换成 `python` 或 `py -3`。On Windows use `python` or `py -3` instead of `python3`.
+---
 
-## 1. 安装 / Install
+## 最省事:一键安装 / One-liner
 
-需要 Node.js(`npx` 随 npm 提供)。Requires Node.js (`npx` ships with npm).
+在你的项目目录里运行 / Run in your project dir:
+
+**mac / Linux**
+```bash
+curl -fsSL https://raw.githubusercontent.com/shoploopai/shoploop-skills/main/install.sh | sh
+```
+**Windows(PowerShell)**
+```powershell
+irm https://raw.githubusercontent.com/shoploopai/shoploop-skills/main/install.ps1 | iex
+```
+
+它会自动用 npx 装好技能并生成 `.env.shoploop`。装完把你的 key 填进 `.env.shoploop`,**新开一个 Codex 会话**即可(用法见第 4 步)。
+It auto-installs the skills via npx and scaffolds `.env.shoploop`.
+
+> 访问 GitHub 不便?用我们给的 **`shoploop-installer.zip`**:解压后 mac 运行 `sh install.sh`、Windows 运行 `install.ps1`,效果一样。
+
+想自己一步步来,看下面的**手动 4 步**(同样有效):
+
+---
+
+## 准备一下 / Before you start
+
+1. 已安装 **Codex CLI**(能在终端运行 `codex`)。
+2. 已安装 **Node.js**。终端运行 `node -v` 能看到版本号即可(没有就去 https://nodejs.org 装)。
+3. 有一把 **Shoploop key**(形如 `sk-...`,由我们提供)。
+
+---
+
+## 第 1 步:安装技能 / Install
+
+在你的项目目录打开终端,运行:
 
 ```bash
-# 装进当前项目 / install into the current project
 npx skills add shoploopai/shoploop-skills --all
-
-# 或只装指定技能 / or pick specific skills
-npx skills add shoploopai/shoploop-skills --skill shoploop-video --skill shoploop-setup
-
-# 全局安装,所有项目可用 / global install, available everywhere
-npx skills add shoploopai/shoploop-skills --all -g
 ```
 
-技能装进 Codex 的 `.agents/skills/`(项目)或全局技能目录。装完**新开一个 Codex 会话**,`/skills` 里就能看到。
-Skills land in Codex's `.agents/skills/` (project) or the global skills dir. **Start a new Codex session** after install; they then appear in `/skills`.
+> 想让所有项目都能用,就加 `-g` 全局安装:`npx skills add shoploopai/shoploop-skills --all -g`
 
-## 2. 配置 Key / Configure
+你会看到类似 `Installed 2 skills` 和最后一行 `Done!`,技能就装进了 `.agents/skills/`。
 
-在项目根创建 `.env.shoploop`(或跑 `shoploop-setup` 自动生成模板):
-Create `.env.shoploop` in your project root (or run `shoploop-setup` to generate the template):
+## 第 2 步:填入你的 Key / Add your key
+
+在项目根目录建一个文件 `.env.shoploop`,内容:
 
 ```bash
-SHOPLOOP_KEY=sk-your-customer-key
-SHOPLOOP_BASE=https://seedance.shoploopai.com
-SHOPLOOP_MODEL=seedance2.0
+SHOPLOOP_KEY=sk-换成你的key
 ```
 
-不要提交 `.env.shoploop`;`shoploop-setup` 会自动把它加进 `.gitignore`。
-Do not commit `.env.shoploop`; `shoploop-setup` adds it to `.gitignore` for you.
+(可选,通常不用改)`SHOPLOOP_BASE=https://seedance.shoploopai.com` 和 `SHOPLOOP_MODEL=seedance2.0` 已是默认值。
+**不要把这个文件发给别人、也不要提交到 git。**
 
-## 3. 使用 / Use
+## 第 3 步:重开 Codex / Restart Codex
 
-直接对 Codex 说:"帮我生成一个 9:16 的产品展示视频,5 秒,电影感,下载到 shoploop_outputs/demo.mp4"。
-Just tell Codex: "Make a 9:16 cinematic product video, 5 seconds, save to shoploop_outputs/demo.mp4." Codex auto-selects `shoploop-video`, or type `$shoploop-video`.
+关掉当前 Codex,**重新打开一个会话**(新装的技能要新会话才会加载)。
+输入 `/skills`,应能看到 `shoploop-video`。看到了就说明装好了。
 
-时长 4–15 秒;生成通常需要几分钟。Duration 4–15s; rendering usually takes a few minutes.
+## 第 4 步:开始出片 / Make a video
 
-## 更新 / Update
+直接用中文/英文对 Codex 说你想要什么,例如:
 
-```bash
-npx skills update
-```
+- `帮我做一个 9:16 的产品展示视频,5 秒,电影感,存到 shoploop_outputs/demo.mp4`
+- `把这张图片做成会动的视频，缓慢推进镜头`(把图片路径告诉它)
+- `Make a 16:9 cinematic sunrise over the ocean, 8 seconds`
+
+Codex 会自动选用 `shoploop-video` 技能(也可以手动打 `$shoploop-video`)。
+**生成通常要几分钟**,完成后会给你视频地址 / 下载到的本地文件路径。
+
+---
+
+## 常见问题 / Troubleshooting
+
+- **报 `HTTP 401`** → key 没填对。检查 `.env.shoploop` 在项目根、`SHOPLOOP_KEY` 正确。
+- **`/skills` 里看不到技能** → 没重开会话。关掉 Codex 再开一个新会话。
+- **`npx` 提示找不到命令** → 先装 Node.js(`node -v` 能用即可)。
+- **时长** → 支持 4–15 秒。
+- **更新到最新技能** → 运行 `npx skills update`。
+
+需要帮助随时联系我们。
