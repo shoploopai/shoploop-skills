@@ -20,8 +20,8 @@ curl -fsSL https://raw.githubusercontent.com/shoploopai/shoploop-skills/main/ins
 irm https://raw.githubusercontent.com/shoploopai/shoploop-skills/main/install.ps1 | iex
 ```
 
-它会自动用 npx 装好技能并生成 `.env.shoploop`。装完把你的 key 填进 `.env.shoploop`,**新开一个 Codex 会话**即可(用法见第 4 步)。
-It auto-installs the skills via npx and scaffolds `.env.shoploop`.
+它会自动用 npx 装好技能、生成 `.env.shoploop`,并写一份 `AGENTS.md` 简报——这样**新的 Codex 一开会话就知道**怎么用本项目出片。装完把 key 填进 `.env.shoploop`,新开一个 Codex 会话即可(用法见第 4 步)。
+It auto-installs the skills via npx, scaffolds `.env.shoploop`, and writes an `AGENTS.md` brief so a fresh Codex session immediately knows how to make videos. (Prefer doing it by hand? Copy `AGENTS.example.md` to `AGENTS.md`.)
 
 > 访问 GitHub 不便?用我们给的 **`shoploop-installer.zip`**:解压后 mac 运行 `sh install.sh`、Windows 运行 `install.ps1`,效果一样。
 
