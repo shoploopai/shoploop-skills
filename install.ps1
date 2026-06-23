@@ -47,7 +47,7 @@ Generate with the bundled CLI (it auto-detects the mode; pass references when yo
 - video reference: `--image-file ... --video-file /abs/clip.mp4 --mode video-reference`
 
 Defaults & behavior:
-- Model `seedance2.0`; duration 4-15s (default 5); prefer 9:16 for social/mobile.
+- Model `seedance2.0`. Before generating, CONFIRM the output settings with the user (二次确认): duration (4-15s), resolution (e.g. 1080p), aspect ratio (e.g. 9:16). Suggest 5s/1080p/9:16 but never assume — wait for the user's go-ahead, then pass the confirmed values.
 - Save outputs under `shoploop_outputs/`. The CLI prints the mp4 URL; use `--json` for machine-readable output.
 - Rendering takes several minutes — do not assume an instant result.
 - On HTTP 401 the key is missing or invalid; on a moderation failure, suggest a clearer or safer prompt. Report problems in Shoploop terms only.

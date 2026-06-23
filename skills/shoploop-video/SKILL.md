@@ -17,6 +17,8 @@ Use the bundled CLI from this skill:
 python3 .agents/skills/shoploop-video/scripts/shoploop.py "cinematic 9:16 product demo, soft morning light" --duration 5 --aspect-ratio 9:16 --resolution 1080p --download shoploop_outputs/demo.mp4
 ```
 
+The `--duration 5`, `--aspect-ratio 9:16`, and `--resolution 1080p` here are just sample values — confirm the real ones with the user first (see **Confirm Output Settings**).
+
 The CLI finds `.env.shoploop` by searching from the current directory upward to the project root. Run the script at its installed path (`.agents/skills/shoploop-video/scripts/shoploop.py` for a project install, or the matching path under your global skills dir). On Windows use `python` or `py -3` instead of `python3`. Required:
 
 ```bash
@@ -36,21 +38,34 @@ python3 .agents/skills/shoploop-video/scripts/shoploop.py --check-key
 - If the user does not have a key, tell them to get one from their Shoploop provider. Never guess, invent, or reuse a key, and never echo the key back into chat, logs, or commits.
 - Prefer `shoploop-setup` when the skill itself is not installed or you want the full scaffold (`.env.shoploop` + `.gitignore` + check) in one step.
 
+## Confirm Output Settings (ask the user first)
+
+The numbers in every example below (5s, 1080p, 9:16) are **illustrative samples, not defaults to apply blindly**. Before you generate, confirm these three output settings with the user and wait for their answer (二次确认) — this is required even if the request seems clear:
+
+1. **Duration / 时长** — how many seconds? Supported range **4–15s**. (If they have no preference, suggest 5s.)
+2. **Resolution / 画质** — e.g. **1080p** or 720p. (Suggest 1080p.)
+3. **Aspect ratio / 比例** — e.g. **9:16** (vertical/social), **16:9** (landscape), **1:1** (square). (Suggest 9:16 for social/mobile.)
+
+How to confirm: restate the full set with your suggested values and ask the user to confirm or adjust, e.g. "我按 **5 秒 / 1080p / 9:16** 来生成,可以吗?要改时长、画质或比例直接说。" Even if the user already specified one or two of them, still echo back all three and get an explicit go-ahead. Do not run the CLI until the user has confirmed. Then pass exactly the confirmed values via `--duration` / `--resolution` / `--aspect-ratio`.
+
 ## Workflow
 
 1. Confirm the key is configured (see **API Key — Check First**). If it is not, ask the user for it and save it before doing anything else.
-2. Understand the user's target video: subject, action, style, aspect ratio, duration, and deliverable path.
-3. Preserve every user-provided image or video exactly. Do not crop, resize, enhance, extract frames, transcode, or split media unless the user explicitly asks.
-4. Choose the smallest matching mode:
+2. Understand the user's target video: subject, action, style, and deliverable path.
+3. **Confirm the output settings — duration, resolution, and aspect ratio — with the user (see Confirm Output Settings). Do NOT generate until the user has confirmed all three.**
+4. Preserve every user-provided image or video exactly. Do not crop, resize, enhance, extract frames, transcode, or split media unless the user explicitly asks.
+5. Choose the smallest matching mode:
    - Text only: no references.
    - One image: `--mode image`.
    - Two or more images as visual, character, style, product, or scene references: `--mode multi-reference`.
    - First and last frame: `--mode first-last` and pass the first frame before the last frame.
    - Reference video for motion, rhythm, or camera movement: `--mode video-reference`.
-5. Run `scripts/shoploop.py` with `--json` when another tool needs machine-readable output; otherwise return the mp4 URL and any downloaded file path.
-6. If rendering fails, report the Shoploop-facing reason plainly and suggest a smaller, safer prompt only when moderation or prompt ambiguity is the likely cause.
+6. Run `scripts/shoploop.py` with the user's **confirmed** duration / resolution / aspect ratio. Add `--json` when another tool needs machine-readable output; otherwise return the mp4 URL and any downloaded file path.
+7. If rendering fails, report the Shoploop-facing reason plainly and suggest a smaller, safer prompt only when moderation or prompt ambiguity is the likely cause.
 
 ## Command Patterns
+
+In every command below, treat `--duration`, `--resolution`, and `--aspect-ratio` as placeholders — substitute the values you confirmed with the user (see **Confirm Output Settings**); do not copy the sample numbers verbatim.
 
 Text to video:
 
@@ -86,13 +101,14 @@ python3 .agents/skills/shoploop-video/scripts/shoploop.py "use the product photo
 
 - Default base URL: `https://seedance.shoploopai.com`.
 - Default public model: `seedance2.0`.
-- Default duration: 5 seconds.
+- Output settings (duration / resolution / aspect ratio) are **suggestions to offer the user, not values to auto-apply** — always confirm them first (see **Confirm Output Settings**). Suggested starting point: 5s / 1080p / 9:16.
 - Supported duration range: 4-15 seconds.
-- Prefer `9:16` for social/mobile requests unless the user asks for another canvas.
 - Use `shoploop_outputs/` for downloaded files when the user does not specify a path.
 
 ## Common Mistakes
 
+- Do not generate with assumed duration, resolution, or aspect ratio — confirm all three with the user first (二次确认), even when the examples show specific values.
+- Do not treat the sample numbers in the example commands as defaults to copy verbatim.
 - Do not ask users to run commands themselves when you can run the CLI.
 - Do not call the API before confirming a key is configured; if it is missing or still the placeholder, ask the user for their key and save it first.
 - Do not guess, invent, or reuse an API key.
