@@ -145,6 +145,25 @@ def _normalize_aspect_ratio(value: str | None) -> str | None:
     return f"{w_raw}:{h_raw}"
 
 
+_RES_TOKEN_RE = re.compile(r"-(360p|540p|720p|1080p)(?=$|-)", re.I)
+_DUR_TOKEN_RE = re.compile(r"-\d{1,3}s(?=$|-)", re.I)
+
+
+def _model_with_suffixes(base: str, duration: int | None, resolution: str | None) -> str:
+    """Encode duration (and resolution, premium tier only) into the model NAME, because the gateway
+    strips unknown JSON body fields — the model name is the only thing guaranteed to arrive.
+    'seedance2.0' + 15s -> 'seedance2.0-15s'; 'seedance-pro' + 720p + 15s -> 'seedance-pro-720p-15s'.
+    Resolution rides the name only on the premium tier (the default tier is 1080p-only)."""
+    name = base
+    low = name.lower()
+    is_premium = low.startswith(("seedance-pro", "seedance-turbo", "seedance-q2"))
+    if is_premium and resolution and not _RES_TOKEN_RE.search(low):
+        name = f"{name}-{resolution.strip().lower()}"
+    if duration and not _DUR_TOKEN_RE.search(name.lower()):
+        name = f"{name}-{duration}s"
+    return name
+
+
 def _detect_mode(prompt: str, requested: str, image_count: int, video_count: int) -> str:
     if requested != "auto":
         return requested
@@ -224,68 +243,134 @@ def _finish(url: str, args, elapsed: int) -> None:
         print(url)
 
 
-def _stream_response(body: dict, args) -> None:
-    if not _key_is_configured():
-        _die(NO_KEY_MESSAGE)
-    payload = json.dumps(body).encode("utf-8")
+# --- submit + poll (治本) ----------------------------------------------------------------------
+# Long videos render 5–7 min — longer than one HTTP call can stay open through the gateway, so the
+# gateway returns a job_id within ~180s and expects the client to poll. This CLI runs that ENTIRE
+# loop itself: submit -> (mp4? done) / (job_id? poll until ready) / (failed? auto-resubmit once).
+# Because the script never returns "no URL" for the calling AI to misread, the AI never resubmits a
+# still-rendering job — which is exactly what produced the duplicate renders + "poll timeout".
+_SUBMIT_TIMEOUT = 240    # the gateway holds a call up to ~180–270s; give margin
+_POLL_TIMEOUT = 240
+_MAX_TOTAL_WAIT = 900    # 15 min total: covers a 15s render (5–7 min) + one auto-retry
+_POLL_GAP = 3            # each poll already blocks up to the window; just a tiny breather
+_MAX_GENERATIONS = 2     # one automatic resubmit on a genuine render failure
+_JOBID_RE = re.compile(r"job[_\s]*id[:\s#]*([0-9a-f]{16})", re.I)
+_BARE_JOBID_RE = re.compile(r"\b([0-9a-f]{16})\b")
+
+
+class _Transient(Exception):
+    """A retryable error (429 / 5xx / network) — back off and retry, do not fail the run."""
+
+
+def _post_once(body: dict, timeout: int) -> str:
+    """One non-streaming POST; return the assistant message text. _die on terminal auth/quota errors;
+    raise _Transient on 429/5xx/network so the caller backs off and retries."""
+    payload = json.dumps({**body, "stream": False}).encode("utf-8")
     request = urllib.request.Request(
-        BASE + "/v1/chat/completions",
-        data=payload,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {KEY}",
-            "User-Agent": "shoploop-cli/3.0",
-            "Accept": "text/event-stream",
-        },
+        BASE + "/v1/chat/completions", data=payload, method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {KEY}",
+                 "User-Agent": "shoploop-cli/3.0"},
     )
-    started = time.time()
-    text = ""
     try:
-        with OPENER.open(request, timeout=1200) as response:
-            raw_body = b""
-            for raw in response:
-                line = raw.decode("utf-8", "replace").strip()
-                raw_body += raw
-                if not line or not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if data == "[DONE]":
-                    break
-                try:
-                    obj = json.loads(data)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(obj, dict) and obj.get("error"):
-                    _die(f"gateway error: {obj['error']}")
-                for choice in obj.get("choices") or []:
-                    delta = choice.get("delta") or {}
-                    piece = delta.get("content") or ""
-                    if piece:
-                        text += piece
-                        print(f"[shoploop]   [{int(time.time() - started)}s] rendering...", file=sys.stderr)
-            if not text and raw_body:
-                try:
-                    obj = json.loads(raw_body.decode("utf-8", "replace"))
-                    text = json.dumps(obj, ensure_ascii=False)
-                except json.JSONDecodeError:
-                    pass
+        with OPENER.open(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
         detail = exc.read()[:500].decode("utf-8", "replace")
         if exc.code == 401:
             _die("HTTP 401 - the Shoploop API key is missing or invalid. " + NO_KEY_MESSAGE)
         if exc.code in (402, 403):
             _die(f"HTTP {exc.code} - Shoploop account permission or balance problem: {detail}")
-        if exc.code == 429:
-            _die("HTTP 429 - too many requests. Wait briefly and retry.")
+        if exc.code == 429 or exc.code >= 500:
+            raise _Transient(f"HTTP {exc.code}")
         _die(f"HTTP {exc.code}: {detail}")
+    except urllib.error.URLError as exc:
+        raise _Transient(f"network: {exc.reason}")
     except Exception as exc:  # noqa: BLE001
-        _die(f"request failed: {exc}")
+        raise _Transient(str(exc))
+    try:
+        obj = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    if isinstance(obj, dict) and obj.get("error"):
+        _die(f"gateway error: {obj['error']}")
+    try:
+        return obj["choices"][0]["message"]["content"] or ""
+    except (KeyError, IndexError, TypeError):
+        return raw
 
-    match = URL_RE.search(text)
-    if not match:
-        _die(f"no video URL in response: {text[:240]!r}")
-    _finish(match.group(0), args, round(time.time() - started))
+
+def _post_with_retry(body: dict, timeout: int, started: float) -> str:
+    backoff = 5
+    while True:
+        try:
+            return _post_once(body, timeout)
+        except _Transient as exc:
+            if time.time() - started > _MAX_TOTAL_WAIT:
+                _die(f"gave up after repeated transient errors: {exc}")
+            print(f"[shoploop]   transient ({exc}); retrying in {backoff}s...", file=sys.stderr)
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 30)
+
+
+def _extract_url(text: str) -> str | None:
+    m = URL_RE.search(text or "")
+    return m.group(0) if m else None
+
+
+def _extract_job_id(text: str) -> str | None:
+    m = _JOBID_RE.search(text or "") or _BARE_JOBID_RE.search(text or "")
+    return m.group(1).lower() if m else None
+
+
+def _is_failure(text: str) -> bool:
+    return bool(re.search(r"渲染失败|render failed|failed|❌", text or ""))
+
+
+def _is_rejected(text: str) -> bool:
+    # The gateway rejects an impossible request (e.g. 21:9, audio reference) at the door with a clear
+    # ⚠️ reason — deterministic, so surface it and stop (resubmitting would just fail the same way).
+    return "⚠️" in (text or "") or "不支持" in (text or "")
+
+
+def _generate(body: dict, args) -> None:
+    """Submit, then poll the returned job to completion — all inside this one CLI call, so the caller
+    (an AI agent) never manages polling and never resubmits a still-rendering job."""
+    if not _key_is_configured():
+        _die(NO_KEY_MESSAGE)
+    model = body["model"]
+    started = time.time()
+    for attempt in range(1, _MAX_GENERATIONS + 1):
+        text = _post_with_retry(body, _SUBMIT_TIMEOUT, started)
+        url = _extract_url(text)
+        if url:
+            return _finish(url, args, round(time.time() - started))
+        if _is_rejected(text):
+            _die(text.strip())
+        job_id = _extract_job_id(text)
+        if not job_id:
+            if _is_failure(text) and attempt < _MAX_GENERATIONS:
+                _warn(f"render failed (attempt {attempt}/{_MAX_GENERATIONS}); resubmitting...")
+                continue
+            _die(f"render failed" if _is_failure(text) else f"unexpected gateway response: {text[:240]!r}")
+        poll_body = {"model": model, "messages": [{"role": "user", "content": f"poll {job_id}"}]}
+        print(f"[shoploop] rendering (job {job_id}); auto-polling until ready...", file=sys.stderr)
+        while time.time() - started < _MAX_TOTAL_WAIT:
+            text = _post_with_retry(poll_body, _POLL_TIMEOUT, started)
+            url = _extract_url(text)
+            if url:
+                return _finish(url, args, round(time.time() - started))
+            if _is_failure(text):
+                if attempt < _MAX_GENERATIONS:
+                    _warn(f"render failed (attempt {attempt}/{_MAX_GENERATIONS}); resubmitting...")
+                break  # leave the poll loop → outer loop resubmits (or gives up)
+            print(f"[shoploop]   [{int(time.time() - started)}s] still rendering...", file=sys.stderr)
+            time.sleep(_POLL_GAP)
+        else:
+            # window elapsed with no result and no failure → still rendering server-side. Report the
+            # job id so a follow-up fetches it; do NOT resubmit (that double-spends + duplicates).
+            _die(f"still rendering after {int(time.time() - started)}s. Re-run the same command shortly "
+                 f"(or poll job {job_id}) to fetch the finished video — do not start a new render.")
+    _die(f"generation failed after {_MAX_GENERATIONS} attempts. Try a clearer or safer prompt.")
 
 
 def main() -> None:
@@ -341,12 +426,16 @@ def main() -> None:
     if prefix:
         content[0]["text"] = prefix + content[0]["text"]
 
+    # Duration (and resolution, premium tier) ride the MODEL NAME — the gateway strips unknown body
+    # fields, so a `duration` body field never arrives. Body fields stay only as a best-effort
+    # fallback for direct callers.
+    model = _model_with_suffixes(args.model or MODEL, args.duration, args.resolution)
     body = {
-        "model": args.model or MODEL,
-        "stream": True,
+        "model": model,
         "messages": [{"role": "user", "content": content}],
-        "duration": args.duration,
     }
+    if args.duration:
+        body["duration"] = args.duration
     ratio = _normalize_aspect_ratio(args.aspect_ratio)
     if ratio:
         body["aspect_ratio"] = ratio
@@ -360,8 +449,8 @@ def main() -> None:
     if not _key_is_configured():
         _die(NO_KEY_MESSAGE)
 
-    print(f"[shoploop] submitting ({mode}) to {BASE} - rendering, usually a few minutes...", file=sys.stderr)
-    _stream_response(body, args)
+    print(f"[shoploop] submitting ({mode}, model {model}) to {BASE} — long videos auto-poll, usually a few minutes...", file=sys.stderr)
+    _generate(body, args)
 
 
 if __name__ == "__main__":

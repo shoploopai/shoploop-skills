@@ -43,8 +43,8 @@ python3 .agents/skills/shoploop-video/scripts/shoploop.py --check-key
 The numbers in every example below (5s, 1080p, 9:16) are **illustrative samples, not defaults to apply blindly**. Before you generate, confirm these three output settings with the user and wait for their answer (二次确认) — this is required even if the request seems clear:
 
 1. **Duration / 时长** — how many seconds? Supported range **4–15s**. (If they have no preference, suggest 5s.)
-2. **Resolution / 画质** — e.g. **1080p** or 720p. (Suggest 1080p.)
-3. **Aspect ratio / 比例** — e.g. **9:16** (vertical/social), **16:9** (landscape), **1:1** (square). (Suggest 9:16 for social/mobile.)
+2. **Resolution / 画质** — **1080p** (this tier renders at 1080p). (Suggest 1080p.)
+3. **Aspect ratio / 比例** — one of **9:16** (vertical/social), **16:9** (landscape), **1:1** (square), **4:3**, **3:4**. These are the only supported ratios — **21:9 / ultra-wide and other ratios are not available** (the gateway will reject them with a clear message). (Suggest 9:16 for social/mobile.)
 
 How to confirm: restate the full set with your suggested values and ask the user to confirm or adjust, e.g. "我按 **5 秒 / 1080p / 9:16** 来生成,可以吗?要改时长、画质或比例直接说。" Even if the user already specified one or two of them, still echo back all three and get an explicit go-ahead. Do not run the CLI until the user has confirmed. Then pass exactly the confirmed values via `--duration` / `--resolution` / `--aspect-ratio`.
 
@@ -62,6 +62,14 @@ How to confirm: restate the full set with your suggested values and ask the user
    - Reference video for motion, rhythm, or camera movement: `--mode video-reference`.
 6. Run `scripts/shoploop.py` with the user's **confirmed** duration / resolution / aspect ratio. Add `--json` when another tool needs machine-readable output; otherwise return the mp4 URL and any downloaded file path.
 7. If rendering fails, report the Shoploop-facing reason plainly and suggest a smaller, safer prompt only when moderation or prompt ambiguity is the likely cause.
+
+## Long renders — the CLI waits for you (do NOT re-run)
+
+A 10–15s video takes several minutes to render. The CLI handles the whole wait for you: it submits, then polls in the background until the finished mp4 URL is ready — all inside the single command you run. So:
+
+- Run the command **once** and let it finish, even if it takes a few minutes. The `still rendering...` progress lines are normal.
+- **Never** re-run the command (or start another generation) while one is still rendering. Each run starts a brand-new, separately-billed render — re-running is exactly what creates duplicate videos.
+- If the CLI ever exits saying it timed out while the video is still rendering (it prints a `job` id), just run the **same** command once more to fetch it — do not change the prompt or start a different render.
 
 ## Command Patterns
 
@@ -116,3 +124,4 @@ python3 .agents/skills/shoploop-video/scripts/shoploop.py "use the product photo
 - Do not print or store `SHOPLOOP_KEY`.
 - Do not alter reference media unless explicitly requested.
 - Do not assume an instant result; rendering can take several minutes.
+- **Do not re-run the command while a render is in progress.** The CLI polls internally until the mp4 is ready; re-running starts a new, duplicate, billable render. Wait for the single command to finish.
