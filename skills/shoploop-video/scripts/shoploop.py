@@ -108,6 +108,8 @@ class AppendReference(argparse.Action):
             "--image-file": "image-file",
             "--video-url": "video-url",
             "--video-file": "video-file",
+            "--audio-url": "audio-url",
+            "--audio-file": "audio-file",
         }.get(option_string, "image-url")
         refs.append((kind, values))
         setattr(namespace, self.dest, refs)
@@ -147,24 +149,34 @@ def _normalize_aspect_ratio(value: str | None) -> str | None:
 
 _RES_TOKEN_RE = re.compile(r"-(360p|540p|720p|1080p)(?=$|-)", re.I)
 _DUR_TOKEN_RE = re.compile(r"-\d{1,3}s(?=$|-)", re.I)
+_ASPECT_TOKEN_RE = re.compile(r"-\d{1,2}x\d{1,2}(?=$|-)", re.I)
 
 
-def _model_with_suffixes(base: str, duration: int | None, resolution: str | None) -> str:
-    """Encode duration (and resolution, premium tier only) into the model NAME, because the gateway
-    strips unknown JSON body fields — the model name is the only thing guaranteed to arrive.
-    'seedance2.0' + 15s -> 'seedance2.0-15s'; 'seedance-pro' + 720p + 15s -> 'seedance-pro-720p-15s'.
-    Resolution rides the name only on the premium tier (the default tier is 1080p-only)."""
+def _model_with_suffixes(base: str, duration: int | None, resolution: str | None,
+                         aspect: str | None = None) -> str:
+    """Encode duration / resolution / aspect into the model NAME, because the gateway strips unknown
+    JSON body fields — the model name is the only thing guaranteed to arrive. Order is fixed
+    res-dur-aspect so the name matches a registered model: 'seedance2.0' + 720p + 15s + 16:9 ->
+    'seedance2.0-720p-15s-16x9'. Defaults carry NO token (1080p, 5s, 9:16)."""
     name = base
     low = name.lower()
     is_premium = low.startswith(("seedance-pro", "seedance-turbo", "seedance-q2"))
-    if is_premium and resolution and not _RES_TOKEN_RE.search(low):
-        name = f"{name}-{resolution.strip().lower()}"
+    res = (resolution or "").strip().lower()
+    # premium tier: any supported resolution rides the name. default tier: only 720p is a non-default
+    # choice worth encoding (1080p is the default, needs no suffix; 540p etc. are premium-only).
+    if res and not _RES_TOKEN_RE.search(low) and (is_premium or res == "720p"):
+        name = f"{name}-{res}"
     if duration and not _DUR_TOKEN_RE.search(name.lower()):
         name = f"{name}-{duration}s"
+    # aspect rides the name on the default tier only (premium takes it via JSON body). 9:16 is the
+    # default and carries no token; the other supported ratios become a '-WxH' suffix.
+    ar = (aspect or "").strip()
+    if ar and ar != "9:16" and not is_premium and not _ASPECT_TOKEN_RE.search(name.lower()):
+        name = f"{name}-{ar.replace(':', 'x')}"
     return name
 
 
-def _detect_mode(prompt: str, requested: str, image_count: int, video_count: int) -> str:
+def _detect_mode(prompt: str, requested: str, image_count: int, video_count: int, audio_count: int = 0) -> str:
     if requested != "auto":
         return requested
     text = prompt.lower()
@@ -176,7 +188,8 @@ def _detect_mode(prompt: str, requested: str, image_count: int, video_count: int
         return "multi-reference"
     if any(k in text for k in ("图生", "图生视频", "image-to-video", "image to video")):
         return "image"
-    if video_count:
+    # any video or audio reference, or 2+ images -> the gateway's multi-reference engine
+    if video_count or audio_count:
         return "video-reference"
     if image_count >= 2:
         return "multi-reference"
@@ -199,9 +212,9 @@ def _mode_prefix(mode: str, image_count: int, video_count: int) -> str:
             _warn("first-last mode usually needs two images")
         return "Mode: first-last-frame. Treat the first attached image as the first frame and the second as the final frame. "
     if mode == "video-reference":
-        if video_count < 1:
-            _warn("video-reference mode usually needs one reference video")
-        return "Mode: video reference. Use the attached video for motion, rhythm, posture changes, and camera movement. "
+        return ("Mode: multi-reference video. Use the attached image(s) as character/product/scene "
+                "references, the attached video for motion/rhythm/camera movement, and the attached "
+                "audio as the soundtrack or lip-sync/voice driver. ")
     return ""
 
 
@@ -378,12 +391,14 @@ def main() -> None:
     parser.add_argument("prompt", nargs="?", help="text prompt describing the video")
     parser.add_argument("--image", action=AppendReference, dest="refs", metavar="URL", help="reference image URL; repeatable")
     parser.add_argument("--image-file", action=AppendReference, dest="refs", metavar="PATH", help="local reference image file; repeatable")
-    parser.add_argument("--video-url", action=AppendReference, dest="refs", metavar="URL", help="reference video URL")
-    parser.add_argument("--video-file", action=AppendReference, dest="refs", metavar="PATH", help="local reference video file")
-    parser.add_argument("--duration", type=int, default=5, metavar="SECONDS", help="video duration, 4-15 seconds")
+    parser.add_argument("--video-url", action=AppendReference, dest="refs", metavar="URL", help="reference video URL (motion/camera reference); repeatable, up to 3")
+    parser.add_argument("--video-file", action=AppendReference, dest="refs", metavar="PATH", help="local reference video file; repeatable, up to 3")
+    parser.add_argument("--audio-url", action=AppendReference, dest="refs", metavar="URL", help="reference audio URL (soundtrack / lip-sync voice); repeatable, up to 3")
+    parser.add_argument("--audio-file", action=AppendReference, dest="refs", metavar="PATH", help="local reference audio file; repeatable, up to 3")
+    parser.add_argument("--duration", type=int, default=5, metavar="SECONDS", help="video duration, any of 4/5/8/10/15 seconds")
     parser.add_argument("--mode", choices=("auto", "text", "image", "multi-reference", "video-reference", "first-last"), default="auto")
-    parser.add_argument("--aspect-ratio", default=None, metavar="RATIO", help="canvas ratio, e.g. 9:16, 16:9, 1080x1920")
-    parser.add_argument("--resolution", default=None, metavar="VALUE", help="output resolution, e.g. 1080p")
+    parser.add_argument("--aspect-ratio", default=None, metavar="RATIO", help="canvas ratio: 9:16 (default), 16:9, 1:1, 4:3, or 3:4")
+    parser.add_argument("--resolution", default=None, metavar="VALUE", help="output resolution: 720p or 1080p (default)")
     parser.add_argument("--model", default=None, metavar="MODEL", help="public Shoploop model name; default seedance2.0")
     parser.add_argument("--download", default=None, metavar="PATH", help="also save the mp4 to this local path")
     parser.add_argument("--json", action="store_true", help="print JSON {url, elapsed, download?}")
@@ -407,6 +422,7 @@ def main() -> None:
     content = [{"type": "text", "text": args.prompt}]
     image_count = 0
     video_count = 0
+    audio_count = 0
     for kind, value in args.refs or []:
         if kind == "image-url":
             content.append({"type": "image_url", "image_url": {"url": value}})
@@ -420,23 +436,29 @@ def main() -> None:
         elif kind == "video-file":
             content.append({"type": "video_url", "video_url": {"url": _file_data_url(value, "video/mp4")}})
             video_count += 1
+        elif kind == "audio-url":
+            content.append({"type": "audio_url", "audio_url": {"url": value}})
+            audio_count += 1
+        elif kind == "audio-file":
+            content.append({"type": "audio_url", "audio_url": {"url": _file_data_url(value, "audio/mpeg")}})
+            audio_count += 1
 
-    mode = _detect_mode(args.prompt, args.mode, image_count, video_count)
+    mode = _detect_mode(args.prompt, args.mode, image_count, video_count, audio_count)
     prefix = _mode_prefix(mode, image_count, video_count)
     if prefix:
         content[0]["text"] = prefix + content[0]["text"]
 
-    # Duration (and resolution, premium tier) ride the MODEL NAME — the gateway strips unknown body
-    # fields, so a `duration` body field never arrives. Body fields stay only as a best-effort
-    # fallback for direct callers.
-    model = _model_with_suffixes(args.model or MODEL, args.duration, args.resolution)
+    # Every knob the customer can control rides the MODEL NAME — the gateway strips unknown body
+    # fields (duration/resolution/aspect_ratio never arrive as body). Body fields stay only as a
+    # best-effort fallback for direct (non-gateway) callers.
+    ratio = _normalize_aspect_ratio(args.aspect_ratio)
+    model = _model_with_suffixes(args.model or MODEL, args.duration, args.resolution, ratio)
     body = {
         "model": model,
         "messages": [{"role": "user", "content": content}],
     }
     if args.duration:
         body["duration"] = args.duration
-    ratio = _normalize_aspect_ratio(args.aspect_ratio)
     if ratio:
         body["aspect_ratio"] = ratio
     if args.resolution:
