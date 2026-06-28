@@ -1,6 +1,6 @@
 ---
 name: shoploop-video
-description: Use when the user wants to generate, create, render, or download a Shoploop/Seedance video from text, one or more reference images, first/last frames, a reference video, a reference audio, or any mix of those in one render (multi-source); also use for prompt-to-video, image-to-video, video-reference motion, multi-reference product/model showcase, controllable duration (4-15s) / resolution (720p/1080p) / aspect ratio (9:16/16:9/1:1/4:3/3:4), social short clips, product videos, and no-watermark mp4 delivery through a Shoploop API key.
+description: Use when the user wants to generate, create, render, or download a Shoploop/Seedance video from text, one or more reference images, first/last frames, a reference video, a reference audio, or any mix of those in one render (multi-source); also use for prompt-to-video, image-to-video, video-reference motion, multi-reference product/model showcase, controllable duration (4-15s) / resolution (720p/1080p) / aspect ratio (9:16/21:9/16:9/1:1/4:3/3:4), social short clips, product videos, and no-watermark mp4 delivery through a Shoploop API key.
 ---
 
 # Shoploop Video
@@ -44,7 +44,7 @@ The numbers in every example below (5s, 1080p, 9:16) are **illustrative samples,
 
 1. **Duration / 时长** — how many seconds? Supported values **4 / 5 / 8 / 10 / 15s**. (If they have no preference, suggest 5s.)
 2. **Resolution / 画质** — **720p** or **1080p**. (Suggest 1080p; 720p renders a bit faster/cheaper.)
-3. **Aspect ratio / 比例** — one of **9:16** (vertical/social), **16:9** (landscape), **1:1** (square), **4:3**, **3:4**. These are the only supported ratios — **21:9 / ultra-wide and other ratios are not available** (the gateway will reject them with a clear message). (Suggest 9:16 for social/mobile.)
+3. **Aspect ratio / 比例** — one of **9:16** (vertical/social), **21:9** (ultra-wide), **16:9** (landscape), **1:1** (square), **4:3**, **3:4**. These are the supported ratios; other ratios are not available and the gateway will reject them with a clear message. (Suggest 9:16 for social/mobile.)
 
 All three knobs are independent and fully controllable — any duration × any resolution × any ratio is a valid combination, including multi-reference renders. Pass them via `--duration` / `--resolution` / `--aspect-ratio`.
 
@@ -127,7 +127,7 @@ Add `--audio-file /absolute/path/voice.mp3` (or `--audio-url`) to drive a soundt
 - Default base URL: `https://seedance.shoploopai.com`.
 - Default public model: `seedance2.0`.
 - Output settings (duration / resolution / aspect ratio) are **suggestions to offer the user, not values to auto-apply** — always confirm them first (see **Confirm Output Settings**). Suggested starting point: 5s / 1080p / 9:16.
-- Supported duration: 4 / 5 / 8 / 10 / 15 seconds. Supported resolution: 720p / 1080p. Supported ratios: 9:16 / 16:9 / 1:1 / 4:3 / 3:4. Any combination is valid (the knobs are independent).
+- Supported duration: 4 / 5 / 8 / 10 / 15 seconds. Supported resolution: 720p / 1080p. Supported ratios: 9:16 / 21:9 / 16:9 / 1:1 / 4:3 / 3:4. Any combination is valid (the knobs are independent).
 - References can be combined: image(s) + reference video + reference audio in one render (multi-source). Up to 3 videos and 3 audios; total reference length ≤ 15s.
 - Use `shoploop_outputs/` for downloaded files when the user does not specify a path.
 

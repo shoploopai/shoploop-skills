@@ -329,7 +329,7 @@ def _is_failure(text: str) -> bool:
 
 
 def _is_rejected(text: str) -> bool:
-    # The gateway rejects an impossible request (e.g. 21:9, audio reference) at the door with a clear
+    # The gateway rejects an impossible request (e.g. unsupported audio reference) at the door with a clear
     # ⚠️ reason — deterministic, so surface it and stop (resubmitting would just fail the same way).
     return "⚠️" in (text or "") or "不支持" in (text or "")
 
@@ -386,7 +386,7 @@ def main() -> None:
     parser.add_argument("--audio-file", action=AppendReference, dest="refs", metavar="PATH", help="local reference audio file; repeatable, up to 3")
     parser.add_argument("--duration", type=int, default=5, metavar="SECONDS", help="video duration, any of 4/5/8/10/15 seconds")
     parser.add_argument("--mode", choices=("auto", "text", "image", "multi-reference", "video-reference", "first-last"), default="auto")
-    parser.add_argument("--aspect-ratio", default=None, metavar="RATIO", help="canvas ratio: 9:16 (default), 16:9, 1:1, 4:3, or 3:4")
+    parser.add_argument("--aspect-ratio", default=None, metavar="RATIO", help="canvas ratio: 9:16 (default), 21:9, 16:9, 1:1, 4:3, or 3:4")
     parser.add_argument("--resolution", default=None, metavar="VALUE", help="output resolution: 720p or 1080p (default)")
     parser.add_argument("--model", default=None, metavar="MODEL", help="public Shoploop model name; default seedance2.0")
     parser.add_argument("--download", default=None, metavar="PATH", help="also save the mp4 to this local path")
