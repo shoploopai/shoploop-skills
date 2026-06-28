@@ -152,28 +152,17 @@ _DUR_TOKEN_RE = re.compile(r"-\d{1,3}s(?=$|-)", re.I)
 _ASPECT_TOKEN_RE = re.compile(r"-\d{1,2}x\d{1,2}(?=$|-)", re.I)
 
 
-def _model_with_suffixes(base: str, duration: int | None, resolution: str | None,
-                         aspect: str | None = None) -> str:
-    """Encode duration / resolution / aspect into the model NAME, because the gateway strips unknown
-    JSON body fields — the model name is the only thing guaranteed to arrive. Order is fixed
-    res-dur-aspect so the name matches a registered model: 'seedance2.0' + 720p + 15s + 16:9 ->
-    'seedance2.0-720p-15s-16x9'. Defaults carry NO token (1080p, 5s, 9:16)."""
-    name = base
-    low = name.lower()
-    is_premium = low.startswith(("seedance-pro", "seedance-turbo", "seedance-q2"))
-    res = (resolution or "").strip().lower()
-    # premium tier: any supported resolution rides the name. default tier: only 720p is a non-default
-    # choice worth encoding (1080p is the default, needs no suffix; 540p etc. are premium-only).
-    if res and not _RES_TOKEN_RE.search(low) and (is_premium or res == "720p"):
-        name = f"{name}-{res}"
-    if duration and not _DUR_TOKEN_RE.search(name.lower()):
-        name = f"{name}-{duration}s"
-    # aspect rides the name on the default tier only (premium takes it via JSON body). 9:16 is the
-    # default and carries no token; the other supported ratios become a '-WxH' suffix.
-    ar = (aspect or "").strip()
-    if ar and ar != "9:16" and not is_premium and not _ASPECT_TOKEN_RE.search(name.lower()):
-        name = f"{name}-{ar.replace(':', 'x')}"
-    return name
+def _base_model(model: str) -> str:
+    """Keep the public model stable; video controls are sent as JSON body fields.
+
+    Older configs may still include suffixes such as -15s or -720p. Normalize them away
+    so CLI flags/body fields remain the source of truth.
+    """
+    name = (model or MODEL).strip() or "seedance2.0"
+    name = _RES_TOKEN_RE.sub("", name)
+    name = _DUR_TOKEN_RE.sub("", name)
+    name = _ASPECT_TOKEN_RE.sub("", name)
+    return name or "seedance2.0"
 
 
 def _detect_mode(prompt: str, requested: str, image_count: int, video_count: int, audio_count: int = 0) -> str:
@@ -448,11 +437,8 @@ def main() -> None:
     if prefix:
         content[0]["text"] = prefix + content[0]["text"]
 
-    # Every knob the customer can control rides the MODEL NAME — the gateway strips unknown body
-    # fields (duration/resolution/aspect_ratio never arrive as body). Body fields stay only as a
-    # best-effort fallback for direct (non-gateway) callers.
     ratio = _normalize_aspect_ratio(args.aspect_ratio)
-    model = _model_with_suffixes(args.model or MODEL, args.duration, args.resolution, ratio)
+    model = _base_model(args.model or MODEL)
     body = {
         "model": model,
         "messages": [{"role": "user", "content": content}],
